@@ -1,0 +1,17 @@
+{
+    "name": "Razer.WyvrnSDK.Tests",
+    "rootNamespace": "",
+    "references": [
+        "GUID:d233e77006a955745ab0cdffe5d9d7d7",
+        "GUID:1f89ff0407f86cf49a923a565e02a822"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

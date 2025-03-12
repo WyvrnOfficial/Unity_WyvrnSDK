@@ -1,0 +1,28 @@
+{
+  "name": "com.razer.wyvrnsdk",
+  "version": "2.0.12",
+  "displayName": "Razer Wyvrn SDK",
+  "description": "Razer Wyvrn SDK for Unity",
+  "unity": "2021.3",
+  "unityRelease": "15f1",
+  "documentationUrl": "https://github.com/razerofficial/Unity_ChromaSDK_Unicode",
+  "changelogUrl": "https://github.com/razerofficial/Unity_ChromaSDK_Unicode?#changelog",
+  "licensesUrl": "https://github.com/razerofficial/Unity_ChromaSDK_Unicode?#licensing",
+  "dependencies": {
+    "com.unity.textmeshpro": "3.0.6"
+  },
+  "keywords": [
+    "ai",
+    "wyvrn",
+    "chroma",
+    "haps",
+    "haptics",
+    "rgb",
+    "chroma rgb"
+  ],
+  "author": {
+    "name": "Razer Inc.",
+    "email": "developers@razer.com",
+    "url": "https://www.razer.com"
+  }
+}
