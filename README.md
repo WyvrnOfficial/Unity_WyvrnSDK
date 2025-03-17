@@ -22,6 +22,7 @@ The WYVRN SDK is the combination of AI, Chroma, and Razer Sensa HD Haptics in a 
 
 | Engine | Git Repo | Download Link |
 |----------|---------|---------------|
+| WYVRN Design Template    | [Git](https://github.com/WyvrnOfficial/CSDK_WyvrnSDK_GameSample/releases/tag/2.0.1.6)   | [Download](https://github.com/WyvrnOfficial/CSDK_WyvrnSDK_GameSample/releases/download/2.0.1.6/Wyvrn_Design_Template_Developers.xlsx)   |
 | WYVRN C++ SDK  | [Git](https://github.com/WyvrnOfficial/CSDK_WyvrnSDK_GameSample)   | [Download](https://github.com/WyvrnOfficial/CSDK_WyvrnSDK_GameSample/archive/refs/heads/UNICODE.zip) |
 | WYVRN Unreal SDK    | [Git](https://github.com/WyvrnOfficial/Unreal_WyvrnSDK)   | [Download](https://github.com/WyvrnOfficial/Unreal_WyvrnSDK/archive/refs/heads/UNICODE.zip)   |
 | WYVRN Unity SDK    | [Git](https://github.com/WyvrnOfficial/Unity_WyvrnSDK)   | [Download](https://github.com/WyvrnOfficial/Unity_WyvrnSDK/archive/refs/heads/UNICODE.zip)   |
