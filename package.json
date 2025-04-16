@@ -1,13 +1,13 @@
 {
   "name": "com.razer.wyvrnsdk",
-  "version": "2.0.12",
+  "version": "2.0.20",
   "displayName": "Razer Wyvrn SDK",
   "description": "Razer Wyvrn SDK for Unity",
   "unity": "2021.3",
   "unityRelease": "15f1",
-  "documentationUrl": "https://github.com/razerofficial/Unity_ChromaSDK_Unicode",
-  "changelogUrl": "https://github.com/razerofficial/Unity_ChromaSDK_Unicode?#changelog",
-  "licensesUrl": "https://github.com/razerofficial/Unity_ChromaSDK_Unicode?#licensing",
+  "documentationUrl": "https://github.com/WyvrnOfficial/Unity_WyvrnSDK/tree/UNICODE_WITHOUT_DLL",
+  "changelogUrl": "https://github.com/WyvrnOfficial/Unity_WyvrnSDK/tree/UNICODE_WITHOUT_DLL?#changelog",
+  "licensesUrl": "https://github.com/WyvrnOfficial/Unity_WyvrnSDK/tree/UNICODE_WITHOUT_DLL?#licensing",
   "dependencies": {
     "com.unity.textmeshpro": "3.0.6"
   },
