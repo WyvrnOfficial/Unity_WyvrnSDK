@@ -53,7 +53,7 @@ public class GameSample : MonoBehaviour
         {
             int result = WyvrnAPI.CoreUnInit();
 #if !UNITY_EDITOR
-            WyvrnAPI.UninitAPI();
+            WyvrnAPI.CoreUnInit();
 #endif
             if (result != RazerErrors.RZRESULT_SUCCESS)
             {
