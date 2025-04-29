@@ -18,8 +18,8 @@ public class GameSample : MonoBehaviour
         }
 
         WyvrnSDK.APPINFOTYPE appInfo = new APPINFOTYPE();
-        appInfo.Title = "Razer Wyvrn Unity Game Sample Application";
-        appInfo.Description = "A sample application using Razer Wyvrn SDK";
+        appInfo.Title = "Game Sample: Application";
+        appInfo.Description = "A Unity sample application using Razer Wyvrn SDK";
 
         appInfo.Author_Name = "Razer";
         appInfo.Author_Contact = "https://wyvrn.com";
