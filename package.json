@@ -1,8 +1,8 @@
 {
   "name": "com.razer.wyvrnsdk",
-  "version": "2.0.20",
-  "displayName": "Razer Wyvrn SDK",
-  "description": "Razer Wyvrn SDK for Unity",
+  "version": "2.0.21",
+  "displayName": "Razer WYVRN SDK",
+  "description": "Razer WYVRN SDK for Unity",
   "unity": "2021.3",
   "unityRelease": "15f1",
   "documentationUrl": "https://github.com/WyvrnOfficial/Unity_WyvrnSDK/tree/UNICODE_WITHOUT_DLL",
