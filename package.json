@@ -1,6 +1,6 @@
 {
   "name": "com.razer.wyvrnsdk",
-  "version": "2.0.21",
+  "version": "2.0.22",
   "displayName": "Razer WYVRN SDK",
   "description": "Razer WYVRN SDK for Unity",
   "unity": "2021.3",

@@ -49,34 +49,90 @@ namespace WyvrnSDK
 
 #if ENABLE_IL2CPP
 
-		[DllImport("version.dll", CharSet = CharSet.Unicode)]
-		private static extern int GetFileVersionInfoSize(string lptstrFilename, out uint lpdwHandle);
-		[DllImport("version.dll", CharSet = CharSet.Unicode)]
-		private static extern bool GetFileVersionInfo(string lptstrFilename, uint dwHandle, uint dwLen, IntPtr lpData);
-		[DllImport("version.dll", CharSet = CharSet.Unicode)]
-		private static extern bool VerQueryValue(IntPtr pBlock, string lpSubBlock, out IntPtr lplpBuffer, out uint puLen);
-		public static string GetProductVersion(string filePath)
-		{
-			string fileVersion = null;
-			uint handle;
-			int size = GetFileVersionInfoSize(filePath, out handle);
-			if (size > 0)
-			{
-				IntPtr buffer = Marshal.AllocHGlobal(size);
-				if (GetFileVersionInfo(filePath, handle, (uint)size, buffer))
-				{
-					IntPtr pValue;
-					uint len;
-					if (VerQueryValue(buffer, "\\StringFileInfo\\040904b0\\FileVersion", out pValue, out len))
-					{
-						fileVersion = Marshal.PtrToStringUni(pValue);
-						//Debug.Log("File Version: " + fileVersion);
-					}
-				}
-				Marshal.FreeHGlobal(buffer);
-			}
-			return fileVersion;
-		}
+        [DllImport("version.dll", CharSet = CharSet.Unicode)]
+        private static extern int GetFileVersionInfoSize(string lptstrFilename, out uint lpdwHandle);
+        [DllImport("version.dll", CharSet = CharSet.Unicode)]
+        private static extern bool GetFileVersionInfo(string lptstrFilename, uint dwHandle, uint dwLen, IntPtr lpData);
+        [DllImport("version.dll", CharSet = CharSet.Unicode)]
+        private static extern bool VerQueryValue(IntPtr pBlock, string lpSubBlock, out IntPtr lplpBuffer, out uint puLen);
+
+        // Define the structure to hold language and code page info
+        [StructLayout(LayoutKind.Sequential)]
+        private struct LangAndCodePage
+        {
+            public ushort wLanguage;
+            public ushort wCodePage;
+        }
+
+        public static string GetProductVersion(string filePath)
+        {
+            uint handle;
+            int size = GetFileVersionInfoSize(filePath, out handle);
+
+            if (size == 0)
+            {
+                // File not found, no version info, or other error
+                //Debug.LogError($"GetFileVersionInfoSize failed for {filePath}. Error: {Marshal.GetLastWin32Error()}");
+                return null;
+            }
+
+            IntPtr buffer = Marshal.AllocHGlobal(size);
+            try
+            {
+                if (!GetFileVersionInfo(filePath, handle, (uint)size, buffer))
+                {
+                    //Debug.LogError($"GetFileVersionInfo failed for {filePath}. Error: {Marshal.GetLastWin32Error()}");
+                    return null;
+                }
+
+                IntPtr pValue;
+                uint len;
+
+                // First, get the list of available translations
+                if (!VerQueryValue(buffer, "\\VarFileInfo\\Translation", out pValue, out len))
+                {
+                    // If there are no translations, try a neutral one as a fallback.
+                    // This is common for many files.
+                    string subBlock = $"\\StringFileInfo\\{0409:X4}{1200:X4}\\FileVersion"; // US English, Unicode
+                    if (VerQueryValue(buffer, subBlock, out pValue, out len))
+                    {
+                        return Marshal.PtrToStringUni(pValue);
+                    }
+                    //Debug.LogError("Could not find translation information");
+                    return null;
+                }
+                
+                // The length is the total size in bytes of the translation array.
+                // We divide by the size of our struct to get the count.
+                int translationCount = (int)len / Marshal.SizeOf(typeof(LangAndCodePage));
+                LangAndCodePage[] translations = new LangAndCodePage[translationCount];
+                
+                // Marshal the array of structs from the pointer
+                IntPtr currentPtr = pValue;
+                for (int i = 0; i < translationCount; i++)
+                {
+                    translations[i] = (LangAndCodePage)Marshal.PtrToStructure(currentPtr, typeof(LangAndCodePage));
+                    currentPtr = (IntPtr)(currentPtr.ToInt64() + Marshal.SizeOf(typeof(LangAndCodePage)));
+                }
+
+                // Try each translation until we find one that works
+                foreach (var translation in translations)
+                {
+                    string subBlock = $@"\StringFileInfo\{translation.wLanguage:X4}{translation.wCodePage:X4}\FileVersion";
+                    if (VerQueryValue(buffer, subBlock, out pValue, out len) && len > 0)
+                    {
+                        return Marshal.PtrToStringUni(pValue);
+                    }
+                }
+
+                //Debug.LogError("Could not find FileVersion information in any language");
+                return null;
+            }
+            finally
+            {
+                Marshal.FreeHGlobal(buffer);
+            }
+        }
 
 #endif
 
