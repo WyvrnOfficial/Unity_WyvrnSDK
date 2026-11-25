@@ -22,8 +22,23 @@ built against** — mixing vintages is the usual cause of a load failure.
 
 Only the `.prx` are needed. The `_stub.a` / `_stub_weak.a` import libraries
 alongside them are for link-time binding, which is how the *Unreal* plugin
-consumes HAR; Unity resolves the entry points at runtime through P/Invoke
-instead, so the stubs are irrelevant here.
+consumes HAR; Unity does not need them.
+
+This was verified against a real PS5 player build (Unity 6000.3.17f1, Prospero
+SDK 12.000). IL2CPP compiles each `[DllImport]` into a **runtime** lookup —
+
+```cpp
+il2cpp_codegen_resolve_pinvoke<PInvokeFunc>(IL2CPP_NATIVE_STRING("HAR"), "AddHM", ...)
+```
+
+— so nothing is resolved at link time and no stub library is involved. The build
+succeeds with the PRX absent, and both are staged to `Build/Media/Plugins/` when
+present. Two consequences worth knowing:
+
+- The library name in `InterhapticsRuntime.cs` must match the **staged file name**,
+  which is why the `lib` prefix below matters.
+- A missing or misnamed library surfaces as a `DllNotFoundException` on the first
+  call, which is exactly the failure the runtime catches to stay inert.
 
 ### A note on the `lib` prefix
 
