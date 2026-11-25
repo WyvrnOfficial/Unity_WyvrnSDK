@@ -32,6 +32,114 @@ The WYVRN SDK is the combination of AI, Chroma, and Razer Sensa HD Haptics in a 
 || WYVRN Unreal SDK    | [Git](https://github.com/WyvrnOfficial/Unreal_WyvrnSDK/tree/UNICODE_WITHOUT_DLL)   | [Download](https://github.com/WyvrnOfficial/Unreal_WyvrnSDK/archive/refs/heads/UNICODE_WITHOUT_DLL.zip)   |
 || WYVRN Unity SDK    | [Git](https://github.com/WyvrnOfficial/Unity_WyvrnSDK/tree/UNICODE_WITHOUT_DLL)   | [Download](https://github.com/WyvrnOfficial/Unity_WyvrnSDK/archive/refs/heads/UNICODE_WITHOUT_DLL.zip)   |
 
+## PlayStation 5 — Sensa HD Haptics on the DualSense
+
+On PS5 there is no Synapse and no `RzChromatic` DLL, so `SetEventName()` cannot be
+routed to a host service. Instead the SDK carries the haptics itself: WYVRN events
+are mapped to the **Interhaptics HAR** runtime and rendered on the DualSense,
+including its **adaptive triggers**. The Windows/Xbox path is untouched.
+
+Three pieces make this work:
+
+1. **Editor-time import.** A WYVRN haptic folder (`WYVRN.config` plus its `.haps`
+   files) is pulled into the project and baked into assets.
+2. **Automatic event mapping.** At runtime the baked table maps each
+   `External_Command_ID` onto HAR material playback, honouring the config's
+   `Priority`, `Mixing`, `Targeting`/`Spatialization`, `Loop` and
+   `Interrupts_Commands`.
+3. **Adaptive triggers.** An effect whose `.haps` carries a **Stiffness** track
+   drives L2/R2 resistance on the triggers its `Hand` sides address.
+
+### Setup
+
+**1. Drop in the Interhaptics libraries.** Put `HAR.prx` and
+`Provider_DualSensePS5.prx` in `Plugins/PS5/` and tick **PS5** on each in the
+Inspector. These are licensed separately and are not part of this repository — see
+[Plugins/PS5/README.md](Plugins/PS5/README.md). Without them the SDK stays inert on
+PS5: the title still builds, boots and plays, just silently.
+
+**2. Point the importer at your haptic folder.** *Project Settings → WYVRN →
+Haptics Import*. The default root is Synapse's install location
+(`C:/Program Files (x86)/Interhaptics/hapticFolders`) and the app folder defaults to
+the Unity product name.
+
+**3. Import.** *Tools → WYVRN → Import WYVRN Haptics…*, confirm the folder, and the
+baked assets are written under `Assets/Resources/Wyvrn/`.
+
+> The output has to live in a **Resources** folder. Nothing in the project
+> references the baked data — the runtime loads it by path — so anywhere else it
+> would be stripped from the player build and no events would play. The importer
+> refuses to run if the configured root is not a Resources folder.
+
+For build pipelines, the same import runs headless:
+
+```
+Unity.exe -batchmode -quit -projectPath <project> \
+  -executeMethod WyvrnSDK.Haptics.EditorTools.WyvrnHapticsImportMenu.ImportFromCommandLine \
+  -wyvrnHapticFolder "C:/Program Files (x86)/Interhaptics/hapticFolders/My Game"
+```
+
+### Using it
+
+Nothing changes in game code — `CoreInitSDK` / `CoreSetEventName` / `CoreUnInit`
+work as they do on Windows:
+
+```csharp
+WyvrnSDK.APPINFOTYPE appInfo = new WyvrnSDK.APPINFOTYPE();
+appInfo.Title = "My Game";
+WyvrnAPI.CoreInitSDK(ref appInfo);
+
+WyvrnAPI.CoreSetEventName("Effect1");   // plays its haptics on the DualSense
+```
+
+`WyvrnAPI.IsInitialized()` reports whether the haptics are actually live, which is
+`false` when the Interhaptics libraries are missing even though `CoreInitSDK`
+succeeded.
+
+### Player-facing controls
+
+Three independent settings, for a game's own audio/haptics options menu. All may be
+called before `CoreInitSDK` and survive an init/uninit cycle. Each returns
+`RZRESULT_SUCCESS` on PS5 and `RZRESULT_NOT_SUPPORTED` elsewhere, so a shared
+settings screen can call them unconditionally.
+
+| Call | Effect |
+|------|--------|
+| `SetHapticsEnabled(bool)` / `GetHapticsEnabled(out bool)` | Master switch. Off stops playback, releases both triggers, and skips further events. |
+| `SetVibrationGain(int)` / `GetVibrationGain(out int)` | Vibration strength 0–100 (clamped). **Vibration only** — it never scales trigger resistance, and a gain of 0 still plays events, because one may need to arm a trigger. |
+| `SetAdaptiveTriggersEnabled(bool)` / `GetAdaptiveTriggersEnabled(out bool)` | Trigger resistance on/off, independent of vibration. Off releases what is armed but leaves events playing. |
+
+### Behaviour notes
+
+- **Priority ducking.** The highest-priority event playing silences every
+  lower-priority one for its duration. A ducked event keeps playing (muted), so its
+  timeline advances and it resumes mid-stream when the dominant event ends.
+- **Mixing.** Equal-priority events `Merge` by default; an `Override` event plays
+  alone and silences older equal-priority ones until it ends.
+- **Polyphony.** Each effect is loaded under several HAR material ids, so the same
+  effect can overlap itself. Re-triggering a *looping* event restarts its own voice
+  instead of stacking another infinite loop.
+- **Adaptive triggers latch.** Arming a trigger has no duration — the stiffness
+  envelope maps trigger *travel*, not time — so it is **not** released when playback
+  ends. Only an authored OFF command (`Interrupts_Commands`), a stop-all, or the
+  master switch releases it. Design an explicit OFF event for every stiffness event.
+- **Laterality.** `Spatialization` `Global` addresses both palms and both triggers;
+  `Left`/`Right` addresses one. Only the `Hand` target region reaches the DualSense;
+  other body regions in the config are ignored on PS5 (`All` is treated as `Hand`).
+- **Threading.** HAR synthesis runs on a dedicated worker thread; the main thread
+  only enqueues event names.
+
+### Debugging
+
+- `WyvrnSDK.Haptics.WyvrnHapticsLog.VerboseEnabled = true` traces each event through
+  every stage: `CoreSetEventName` → backend → worker queue → command lookup → voice.
+- `Tests/GameSampleHapticsDebug.cs` is a harness for the `Debug_*` commands in the
+  sample `WYVRN.config`, with the three controls wired to sliders and toggles.
+- The render worker registers itself with the profiler, so it appears as its own
+  **WYVRN → Haptic Renderer** thread with `Wyvrn.Haptics.RenderLoop` and
+  `Wyvrn.Haptics.HARRender` samples — that is where to look if HAR synthesis starts
+  costing frame time.
+
 ## Latest
 
 See [https://wyvrn.com](https://wyvrn.com) and [https://doc.wyvrn.com](https://doc.wyvrn.com) for the latest updates and documentation about the WYVRN SDK.

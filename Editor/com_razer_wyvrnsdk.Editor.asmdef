@@ -1,8 +1,12 @@
 {
     "name": "Razer.WyvrnSDK.Editor",
     "rootNamespace": "",
-    "references": [],
-    "includePlatforms": [],
+    "references": [
+        "GUID:1f89ff0407f86cf49a923a565e02a822"
+    ],
+    "includePlatforms": [
+        "Editor"
+    ],
     "excludePlatforms": [],
     "allowUnsafeCode": false,
     "overrideReferences": false,
