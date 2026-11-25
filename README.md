@@ -135,12 +135,23 @@ settings screen can call them unconditionally.
 
 - `WyvrnSDK.Haptics.WyvrnHapticsLog.VerboseEnabled = true` traces each event through
   every stage: `CoreSetEventName` → backend → worker queue → command lookup → voice.
-- `Tests/GameSampleHapticsDebug.cs` is a harness for the `Debug_*` commands in the
-  sample `WYVRN.config`, with the three controls wired to sliders and toggles. It is
-  deliberately **not** attached to the sample scene: that scene predates Unity 2021
-  and saving it from a current editor rewrites it into a format older editors
-  cannot open, which would break the 2021.3 support this package declares. Add the
-  component to the `GameSample` object yourself when you want it.
+- `Tests/GameSampleHapticsDebug.cs` is a guided walkthrough of the `Debug_*` commands
+  in the sample `WYVRN.config`: 30 steps covering laterality, interrupts, priority
+  ducking, Merge vs Override, the adaptive-trigger latch and the three controls, each
+  naming what it fires and what it should feel like. Any gamepad button advances a
+  step, so it is usable on a devkit, where there is no pointer to click with.
+
+  To use it, run **Assets → Razer Wyvrn SDK - Setup Sample Scenes** to copy
+  `Scene_GameSample` into your project's `Assets/Scenes`, then add
+  `GameSampleHapticsDebug` to the `GameSample` object in *that* copy. Add it to the
+  copy rather than to the one inside the package: the packaged scene predates Unity
+  2021, and saving it from a current editor rewrites it into a format older editors
+  cannot open, which would break the 2021.3 support this package declares.
+
+  The harness reads the gamepad through the legacy Input Manager, so *Project
+  Settings → Player → Active Input Handling* must be "Input Manager (Old)" or "Both".
+  Under "Input System Package (New)" it still compiles but falls back to its
+  pointer-driven buttons.
 - The render worker registers itself with the profiler, so it appears as its own
   **WYVRN → Haptic Renderer** thread with `Wyvrn.Haptics.RenderLoop` and
   `Wyvrn.Haptics.HARRender` samples — that is where to look if HAR synthesis starts
