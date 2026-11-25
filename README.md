@@ -52,13 +52,22 @@ Three pieces make this work:
 
 ### Setup
 
+This repository is a **UPM package**, not a Unity project, so it is consumed by a
+project rather than opened directly: add it through *Window → Package Manager → Add
+package from disk*, or reference it in your `Packages/manifest.json`:
+
+```json
+"com.razer.wyvrnsdk": "file:../path/to/Unity_WyvrnSDK"
+```
+
 **1. Drop in the Interhaptics libraries.** Copy `HAR.prx` and
 `Provider_DualSensePS5.prx` out of the Interhaptics Engine SDK for PS5 into
-`Plugins/PS5/`, and tick **PS5** on each in the Inspector. Use the `SDK<version>`
-folder matching your Unity PS5 module, and mind the `lib` prefix on SDK 7–9
-vintages. These binaries are licensed separately and are not part of this
-repository — see [Plugins/PS5/README.md](Plugins/PS5/README.md). Without them the
-SDK stays inert on PS5: the title still builds, boots and plays, just silently.
+`Plugins/PS5/`. Unity recognises them as PS5 plugins from the folder name, so there
+is nothing to tick in the Inspector. Use the `SDK<version>` folder matching your
+Unity PS5 module, and mind the `lib` prefix on SDK 7–9 vintages. These binaries are
+licensed separately and are not part of this repository — see
+[Plugins/PS5/README.md](Plugins/PS5/README.md). Without them the SDK stays inert on
+PS5: the title still builds, boots and plays, just silently.
 
 **2. Point the importer at your haptic folder.** *Project Settings → WYVRN →
 Haptics Import*. The default root is Synapse's install location
@@ -72,6 +81,12 @@ baked assets are written under `Assets/Resources/Wyvrn/`.
 > references the baked data — the runtime loads it by path — so anywhere else it
 > would be stripped from the player build and no events would play. The importer
 > refuses to run if the configured root is not a Resources folder.
+
+**Step 3 is not optional, and skipping it is invisible.** Without it a PS5 build
+still succeeds, still boots, and still brings HAR up — it just drops every event,
+because the command table it looks up was never put in the player. A PS5 build logs
+a warning when the baked data is missing, so check the build log if the pad stays
+quiet.
 
 For build pipelines, the same import runs headless:
 
