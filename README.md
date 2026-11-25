@@ -136,7 +136,11 @@ settings screen can call them unconditionally.
 - `WyvrnSDK.Haptics.WyvrnHapticsLog.VerboseEnabled = true` traces each event through
   every stage: `CoreSetEventName` → backend → worker queue → command lookup → voice.
 - `Tests/GameSampleHapticsDebug.cs` is a harness for the `Debug_*` commands in the
-  sample `WYVRN.config`, with the three controls wired to sliders and toggles.
+  sample `WYVRN.config`, with the three controls wired to sliders and toggles. It is
+  deliberately **not** attached to the sample scene: that scene predates Unity 2021
+  and saving it from a current editor rewrites it into a format older editors
+  cannot open, which would break the 2021.3 support this package declares. Add the
+  component to the `GameSample` object yourself when you want it.
 - The render worker registers itself with the profiler, so it appears as its own
   **WYVRN → Haptic Renderer** thread with `Wyvrn.Haptics.RenderLoop` and
   `Wyvrn.Haptics.HARRender` samples — that is where to look if HAR synthesis starts

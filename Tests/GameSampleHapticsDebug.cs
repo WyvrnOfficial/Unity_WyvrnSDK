@@ -19,7 +19,12 @@ using WyvrnSDK;
 /// </summary>
 public class GameSampleHapticsDebug : MonoBehaviour
 {
-    [Tooltip("Show the harness. Turn off to leave the sample's own UI unobstructed.")]
+    /// <summary>
+    /// On by default: this component is not part of any shipped scene, so adding it is
+    /// already a deliberate act. Untick it to keep the component around while leaving
+    /// the sample's own UI unobstructed.
+    /// </summary>
+    [Tooltip("Show the harness overlay. Untick to keep the component but hide its UI.")]
     public bool ShowHarness = true;
 
     private bool _mHapticsEnabled = true;
