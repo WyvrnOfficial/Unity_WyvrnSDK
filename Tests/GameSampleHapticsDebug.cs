@@ -1,5 +1,8 @@
 // Copyright 2017-2025 Razer, Inc. All Rights Reserved.
 
+using System;
+using System.Collections.Generic;
+
 using UnityEngine;
 
 using WyvrnSDK;
@@ -7,15 +10,15 @@ using WyvrnSDK;
 /// <summary>
 /// PS5 haptics behaviour test harness for the sample scene.
 ///
-/// Each button fires one of the Debug_* commands in the sample
-/// WYVRN.config (HapticFolders/Game Sample Application), so the arbitration rules -
-/// interrupts, priority ducking, Merge vs Override, laterality and the adaptive-trigger
-/// latch - can be verified by hand on a devkit. The sliders and toggles drive the three
-/// haptic controls.
+/// Walks through the arbitration rules one step at a time - interrupts, priority
+/// ducking, Merge vs Override, laterality and the adaptive-trigger latch - firing the
+/// Debug_* commands from the sample WYVRN.config and saying what each step should feel
+/// like. Everything is driven by a single "advance" press, because a devkit has no
+/// mouse and the IMGUI buttons below are only reachable with a pointer.
 ///
-/// Add this alongside <see cref="GameSample"/> on the same scene object. Off PS5 the
-/// controls report "not supported" and the buttons simply name events the Windows path
-/// does not carry haptics for, so it is harmless to leave enabled anywhere.
+/// Add this to the GameSample object when you want it. It is deliberately not attached
+/// to the shipped sample scene: that scene predates Unity 2021 and saving it from a
+/// current editor rewrites it into a format older editors cannot open.
 /// </summary>
 public class GameSampleHapticsDebug : MonoBehaviour
 {
@@ -27,26 +30,239 @@ public class GameSampleHapticsDebug : MonoBehaviour
     [Tooltip("Show the harness overlay. Untick to keep the component but hide its UI.")]
     public bool ShowHarness = true;
 
-    private bool _mHapticsEnabled = true;
-    private bool _mAdaptiveTriggersEnabled = true;
-    private int _mVibrationGain = 100;
-    private bool _mVerboseTrace;
-    private string _mLastResult = string.Empty;
+    [Tooltip("UI scale. The default IMGUI font is unreadable on a TV at 1080p.")]
+    [Range(1.0f, 4.0f)]
+    public float UiScale = 2.0f;
+
+    /// <summary>One step of the guided walkthrough.</summary>
+    private struct Step
+    {
+        public string Action;
+        public string Expect;
+        public Action Run;
+
+        public Step(string action, string expect, Action run)
+        {
+            Action = action;
+            Expect = expect;
+            Run = run;
+        }
+    }
+
+    private readonly List<Step> steps = new List<Step>();
+    private int stepIndex = -1;
+    private string lastResult = string.Empty;
+    private string inputDiagnostic = "no input seen yet";
+
+    // Any gamepad button advances. The DualSense's legacy-input button numbering is
+    // platform-specific, and a bare project has no named axes set up (asking for one
+    // by name throws), so polling the button range is both the safest and the most
+    // portable thing available here.
+    private const int JoystickButtonCount = 20;
+    private bool advanceHeld;
+
+    private bool hapticsEnabled = true;
+    private bool adaptiveTriggersEnabled = true;
+    private int vibrationGain = 100;
 
     private void Start()
     {
         // Read back whatever the backend currently holds, so the UI starts in sync
         // instead of asserting its own defaults over the title's.
-        WyvrnAPI.GetHapticsEnabled(out _mHapticsEnabled);
-        WyvrnAPI.GetVibrationGain(out _mVibrationGain);
-        WyvrnAPI.GetAdaptiveTriggersEnabled(out _mAdaptiveTriggersEnabled);
-        _mVerboseTrace = WyvrnSDK.Haptics.WyvrnHapticsLog.VerboseEnabled;
+        WyvrnAPI.GetHapticsEnabled(out hapticsEnabled);
+        WyvrnAPI.GetVibrationGain(out vibrationGain);
+        WyvrnAPI.GetAdaptiveTriggersEnabled(out adaptiveTriggersEnabled);
+
+        BuildSteps();
+    }
+
+    private void BuildSteps()
+    {
+        steps.Clear();
+
+        steps.Add(new Step("Effect1 (Hand, Global)",
+            "a one-shot buzz in both grips",
+            () => Fire("Effect1")));
+
+        // --- laterality -------------------------------------------------------------
+        steps.Add(new Step("Debug_HandLeft",
+            "LEFT grip only",
+            () => Fire("Debug_HandLeft")));
+        steps.Add(new Step("Debug_HandRight",
+            "RIGHT grip only",
+            () => Fire("Debug_HandRight")));
+        steps.Add(new Step("Debug_HandGlobal",
+            "both grips evenly",
+            () => Fire("Debug_HandGlobal")));
+        steps.Add(new Step("Debug_StopAll",
+            "silence",
+            () => Fire("Debug_StopAll")));
+
+        // --- named interrupt vs stop-all --------------------------------------------
+        steps.Add(new Step("Debug_LoopA",
+            "a continuous loop; it should NOT stop on its own",
+            () => Fire("Debug_LoopA")));
+        steps.Add(new Step("Debug_LoopB (merges with A)",
+            "both loops together, stronger than A alone",
+            () => Fire("Debug_LoopB")));
+        steps.Add(new Step("Debug_StopA (named interrupt)",
+            "A stops, B KEEPS playing - only the named event is stopped",
+            () => Fire("Debug_StopA")));
+        steps.Add(new Step("Debug_StopAll",
+            "silence",
+            () => Fire("Debug_StopAll")));
+
+        // --- priority ducking -------------------------------------------------------
+        steps.Add(new Step("Debug_PriorityLow (loop)",
+            "a steady low-priority loop",
+            () => Fire("Debug_PriorityLow")));
+        steps.Add(new Step("Debug_PriorityHigh (one-shot)",
+            "the loop goes SILENT, then resumes MID-STREAM - not from its start",
+            () => Fire("Debug_PriorityHigh")));
+        steps.Add(new Step("Debug_StopAll",
+            "silence",
+            () => Fire("Debug_StopAll")));
+
+        // --- mixing: merge vs override ----------------------------------------------
+        steps.Add(new Step("Debug_EqualA (loop)",
+            "a steady equal-priority loop",
+            () => Fire("Debug_EqualA")));
+        steps.Add(new Step("Debug_MergeB (one-shot, Merge)",
+            "B plays ON TOP of A; A is never silenced",
+            () => Fire("Debug_MergeB")));
+        steps.Add(new Step("Debug_OverrideB (one-shot, Override)",
+            "A is SILENCED while B plays, then A resumes",
+            () => Fire("Debug_OverrideB")));
+        steps.Add(new Step("Debug_StopAll",
+            "silence",
+            () => Fire("Debug_StopAll")));
+
+        // --- adaptive triggers ------------------------------------------------------
+        steps.Add(new Step("Debug_TriggerOn (latches both)",
+            "squeeze L2 and R2: BOTH resist",
+            () => Fire("Debug_TriggerOn")));
+        steps.Add(new Step("Debug_TriggerOff (authored release)",
+            "both triggers go loose again",
+            () => Fire("Debug_TriggerOff")));
+        steps.Add(new Step("Debug_TriggerLeft",
+            "L2 resists, R2 stays LOOSE",
+            () => Fire("Debug_TriggerLeft")));
+        steps.Add(new Step("Debug_TriggerOff",
+            "L2 goes loose",
+            () => Fire("Debug_TriggerOff")));
+        steps.Add(new Step("Debug_TriggerShot (ONE-SHOT, still latches)",
+            "the buzz ends but the triggers STAY STIFF - the key case. If they go loose on their own, latching is broken",
+            () => Fire("Debug_TriggerShot")));
+        steps.Add(new Step("Debug_TriggerOff",
+            "only now do the triggers release",
+            () => Fire("Debug_TriggerOff")));
+
+        // --- the three controls -----------------------------------------------------
+        steps.Add(new Step("Debug_LoopA + gain 100",
+            "a loop at full strength",
+            () => { SetGain(100); Fire("Debug_LoopA"); }));
+        steps.Add(new Step("gain 50",
+            "the SAME loop, clearly weaker",
+            () => SetGain(50)));
+        steps.Add(new Step("gain 0",
+            "silence, but the loop is still playing",
+            () => SetGain(0)));
+        steps.Add(new Step("Debug_TriggerOn at gain 0",
+            "triggers resist at FULL strength - the gain must not touch resistance",
+            () => Fire("Debug_TriggerOn")));
+        steps.Add(new Step("gain 100",
+            "the loop comes back; triggers unchanged",
+            () => SetGain(100)));
+        steps.Add(new Step("adaptive triggers OFF",
+            "triggers go loose, the loop KEEPS vibrating",
+            () => SetTriggers(false)));
+        steps.Add(new Step("adaptive triggers ON",
+            "triggers re-arm from the surviving claim, without replaying anything",
+            () => SetTriggers(true)));
+        steps.Add(new Step("master haptics OFF",
+            "everything stops: vibration AND trigger resistance",
+            () => SetHaptics(false)));
+        steps.Add(new Step("master haptics ON",
+            "still silent - turning it back on must NOT resume what was stopped",
+            () => SetHaptics(true)));
+        steps.Add(new Step("Debug_StopAll (reset)",
+            "a clean slate; press again to run the sequence from the top",
+            () => Fire("Debug_StopAll")));
     }
 
     private void Fire(string eventName)
     {
         int result = WyvrnAPI.CoreSetEventName(eventName);
-        _mLastResult = string.Format("{0} -> {1}", eventName, RazerErrors.GetResultString(result));
+        lastResult = string.Format("{0} -> {1}", eventName, RazerErrors.GetResultString(result));
+    }
+
+    private void SetGain(int gain)
+    {
+        vibrationGain = gain;
+        int result = WyvrnAPI.SetVibrationGain(gain);
+        lastResult = string.Format("SetVibrationGain({0}) -> {1}", gain, RazerErrors.GetResultString(result));
+    }
+
+    private void SetTriggers(bool enabled)
+    {
+        adaptiveTriggersEnabled = enabled;
+        int result = WyvrnAPI.SetAdaptiveTriggersEnabled(enabled);
+        lastResult = string.Format("SetAdaptiveTriggersEnabled({0}) -> {1}", enabled, RazerErrors.GetResultString(result));
+    }
+
+    private void SetHaptics(bool enabled)
+    {
+        hapticsEnabled = enabled;
+        int result = WyvrnAPI.SetHapticsEnabled(enabled);
+        lastResult = string.Format("SetHapticsEnabled({0}) -> {1}", enabled, RazerErrors.GetResultString(result));
+    }
+
+    private void Advance()
+    {
+        stepIndex = steps.Count == 0 ? -1 : (stepIndex + 1) % steps.Count;
+        if (stepIndex >= 0 && steps[stepIndex].Run != null)
+        {
+            steps[stepIndex].Run();
+        }
+    }
+
+    private void Update()
+    {
+        if (!ShowHarness)
+        {
+            return;
+        }
+
+#if ENABLE_LEGACY_INPUT_MANAGER
+        // Any gamepad button, or Space / Return on a desktop, advances one step. Edge
+        // triggered, so holding a button does not run away through the sequence.
+        bool pressed = Input.GetKey(KeyCode.Space) || Input.GetKey(KeyCode.Return);
+        int whichButton = -1;
+        for (int i = 0; i < JoystickButtonCount; ++i)
+        {
+            if (Input.GetKey(KeyCode.JoystickButton0 + i))
+            {
+                pressed = true;
+                whichButton = i;
+                break;
+            }
+        }
+
+        if (whichButton >= 0)
+        {
+            // Surfaced so the DualSense's button numbering is visible on screen rather
+            // than guessed at; useful if a specific button ever needs its own action.
+            inputDiagnostic = "JoystickButton" + whichButton;
+        }
+
+        if (pressed && !advanceHeld)
+        {
+            Advance();
+        }
+        advanceHeld = pressed;
+#else
+        inputDiagnostic = "built without the legacy Input Manager; use the buttons below";
+#endif
     }
 
     private void OnGUI()
@@ -56,81 +272,44 @@ public class GameSampleHapticsDebug : MonoBehaviour
             return;
         }
 
-        const float width = 300.0f;
-        const float buttonHeight = 28.0f;
+        Matrix4x4 restore = GUI.matrix;
+        GUIUtility.ScaleAroundPivot(new Vector2(UiScale, UiScale), Vector2.zero);
 
-        GUILayout.BeginArea(new Rect(10.0f, 10.0f, width, Screen.height - 20.0f), GUI.skin.box);
-        GUILayout.Label("WYVRN PS5 HAPTICS HARNESS");
+        float width = Screen.width / UiScale - 20.0f;
+        GUILayout.BeginArea(new Rect(10.0f, 10.0f, width, Screen.height / UiScale - 20.0f));
 
-        // --- the three haptic controls ---------------------------------------------
-        GUILayout.Space(4.0f);
-        GUILayout.Label("Controls");
+        GUILayout.Label("WYVRN PS5 HAPTICS WALKTHROUGH");
+        GUILayout.Label(string.Format("initialized: {0}    haptics: {1}    gain: {2}    triggers: {3}",
+            WyvrnAPI.IsInitialized(), hapticsEnabled, vibrationGain, adaptiveTriggersEnabled));
+        GUILayout.Space(6.0f);
 
-        bool wantHaptics = GUILayout.Toggle(_mHapticsEnabled, "Haptics enabled (master)");
-        if (wantHaptics != _mHapticsEnabled)
+        if (stepIndex < 0)
         {
-            _mHapticsEnabled = wantHaptics;
-            WyvrnAPI.SetHapticsEnabled(wantHaptics);
+            GUILayout.Label("Press ANY gamepad button to begin.");
+        }
+        else
+        {
+            Step step = steps[stepIndex];
+            GUILayout.Label(string.Format("STEP {0}/{1}:  {2}", stepIndex + 1, steps.Count, step.Action));
+            GUILayout.Label("EXPECT:  " + step.Expect);
+            GUILayout.Space(4.0f);
+            GUILayout.Label("Press again for the next step.");
         }
 
-        bool wantTriggers = GUILayout.Toggle(_mAdaptiveTriggersEnabled, "Adaptive triggers enabled");
-        if (wantTriggers != _mAdaptiveTriggersEnabled)
-        {
-            _mAdaptiveTriggersEnabled = wantTriggers;
-            WyvrnAPI.SetAdaptiveTriggersEnabled(wantTriggers);
-        }
+        GUILayout.Space(8.0f);
+        GUILayout.Label("last call: " + lastResult);
+        GUILayout.Label("input: " + inputDiagnostic);
 
-        GUILayout.Label(string.Format("Vibration gain: {0}", _mVibrationGain));
-        int wantGain = (int)GUILayout.HorizontalSlider(_mVibrationGain, 0.0f, 100.0f);
-        if (wantGain != _mVibrationGain)
-        {
-            _mVibrationGain = wantGain;
-            WyvrnAPI.SetVibrationGain(wantGain);
-        }
-
-        bool wantTrace = GUILayout.Toggle(_mVerboseTrace, "Verbose event trace");
-        if (wantTrace != _mVerboseTrace)
-        {
-            _mVerboseTrace = wantTrace;
-            WyvrnSDK.Haptics.WyvrnHapticsLog.VerboseEnabled = wantTrace;
-        }
-
-        // --- interrupts and stop-all -----------------------------------------------
-        GUILayout.Space(6.0f);
-        GUILayout.Label("Interrupts");
-        if (GUILayout.Button("Loop A", GUILayout.Height(buttonHeight))) { Fire("Debug_LoopA"); }
-        if (GUILayout.Button("Loop B", GUILayout.Height(buttonHeight))) { Fire("Debug_LoopB"); }
-        if (GUILayout.Button("Stop A (named interrupt)", GUILayout.Height(buttonHeight))) { Fire("Debug_StopA"); }
-        if (GUILayout.Button("Stop All (\"All\" sentinel)", GUILayout.Height(buttonHeight))) { Fire("Debug_StopAll"); }
-
-        // --- laterality -------------------------------------------------------------
-        GUILayout.Space(6.0f);
-        GUILayout.Label("Laterality");
-        if (GUILayout.Button("Hand Global (both palms)", GUILayout.Height(buttonHeight))) { Fire("Debug_HandGlobal"); }
-        if (GUILayout.Button("Hand Left", GUILayout.Height(buttonHeight))) { Fire("Debug_HandLeft"); }
-        if (GUILayout.Button("Hand Right", GUILayout.Height(buttonHeight))) { Fire("Debug_HandRight"); }
-
-        // --- priority and mixing ----------------------------------------------------
-        GUILayout.Space(6.0f);
-        GUILayout.Label("Priority / mixing");
-        if (GUILayout.Button("Priority Low (loop)", GUILayout.Height(buttonHeight))) { Fire("Debug_PriorityLow"); }
-        if (GUILayout.Button("Priority High (once) - ducks", GUILayout.Height(buttonHeight))) { Fire("Debug_PriorityHigh"); }
-        if (GUILayout.Button("Equal A (loop)", GUILayout.Height(buttonHeight))) { Fire("Debug_EqualA"); }
-        if (GUILayout.Button("Merge B (once) - plays with A", GUILayout.Height(buttonHeight))) { Fire("Debug_MergeB"); }
-        if (GUILayout.Button("Override B (once) - silences A", GUILayout.Height(buttonHeight))) { Fire("Debug_OverrideB"); }
-
-        // --- adaptive triggers ------------------------------------------------------
-        GUILayout.Space(6.0f);
-        GUILayout.Label("Adaptive triggers (DualSense)");
-        if (GUILayout.Button("Trigger On (both, latched)", GUILayout.Height(buttonHeight))) { Fire("Debug_TriggerOn"); }
-        if (GUILayout.Button("Trigger Left only", GUILayout.Height(buttonHeight))) { Fire("Debug_TriggerLeft"); }
-        if (GUILayout.Button("Trigger Shot (one-shot, latches)", GUILayout.Height(buttonHeight))) { Fire("Debug_TriggerShot"); }
-        if (GUILayout.Button("Trigger Off (authored release)", GUILayout.Height(buttonHeight))) { Fire("Debug_TriggerOff"); }
-
-        GUILayout.Space(6.0f);
-        GUILayout.Label(string.Format("Initialized: {0}", WyvrnAPI.IsInitialized()));
-        GUILayout.Label(_mLastResult);
+        // Pointer-driven fallbacks, for running the sample in the editor or on desktop.
+        GUILayout.Space(8.0f);
+        GUILayout.BeginHorizontal();
+        if (GUILayout.Button("Next step")) { Advance(); }
+        if (GUILayout.Button("Stop all")) { Fire("Debug_StopAll"); }
+        if (GUILayout.Button("Triggers off")) { Fire("Debug_TriggerOff"); }
+        if (GUILayout.Button("Restart")) { stepIndex = -1; Fire("Debug_StopAll"); }
+        GUILayout.EndHorizontal();
 
         GUILayout.EndArea();
+        GUI.matrix = restore;
     }
 }
