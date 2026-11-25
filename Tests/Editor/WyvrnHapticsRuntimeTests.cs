@@ -165,44 +165,87 @@ namespace WyvrnSDK.Haptics.Tests
 
     /// <summary>
     /// The three haptic controls are PS5-only, but their methods exist on every platform
-    /// so a shared settings menu can call them unconditionally. This pins down that
-    /// doing so off PS5 is inert and safe: a "not supported" result and a defined
-    /// out-parameter, never a crash or a stale value a settings widget would echo back.
+    /// so a shared settings menu can call them unconditionally.
+    ///
+    /// Off PS5 this pins down that calling them is inert and safe: a "not supported"
+    /// result and a defined out-parameter, never a crash or a stale value a settings
+    /// widget would echo back as a tick box. On PS5 the same calls must succeed and the
+    /// backend must cache them even before CoreInitSDK, which is what lets a title apply
+    /// saved settings at startup — so there the round-trip itself is the contract.
+    ///
+    /// Note the editor compiles with UNITY_PS5 defined when the active build target is
+    /// PS5, so this fixture runs down the PS5 branch in a console project.
     /// </summary>
     [TestFixture]
     public class WyvrnHapticControlsTests
     {
+#if UNITY_PS5
+        private const int ExpectedResult = RazerErrors.RZRESULT_SUCCESS;
+#else
+        private const int ExpectedResult = RazerErrors.RZRESULT_NOT_SUPPORTED;
+#endif
+
         [Test]
-        public void SettersAreInertOffPs5()
+        public void SettersReportThePlatformContract()
         {
             // Including values that would be out of range on PS5. Reaching the next line at
-            // all is most of the point: these must not throw off PS5.
-            Assert.AreEqual(RazerErrors.RZRESULT_NOT_SUPPORTED, WyvrnAPI.SetHapticsEnabled(false));
-            Assert.AreEqual(RazerErrors.RZRESULT_NOT_SUPPORTED, WyvrnAPI.SetHapticsEnabled(true));
-            Assert.AreEqual(RazerErrors.RZRESULT_NOT_SUPPORTED, WyvrnAPI.SetVibrationGain(0));
-            Assert.AreEqual(RazerErrors.RZRESULT_NOT_SUPPORTED, WyvrnAPI.SetVibrationGain(100));
-            Assert.AreEqual(RazerErrors.RZRESULT_NOT_SUPPORTED, WyvrnAPI.SetVibrationGain(-5000));
-            Assert.AreEqual(RazerErrors.RZRESULT_NOT_SUPPORTED, WyvrnAPI.SetVibrationGain(int.MaxValue));
-            Assert.AreEqual(RazerErrors.RZRESULT_NOT_SUPPORTED, WyvrnAPI.SetAdaptiveTriggersEnabled(false));
-            Assert.AreEqual(RazerErrors.RZRESULT_NOT_SUPPORTED, WyvrnAPI.SetAdaptiveTriggersEnabled(true));
+            // all is most of the point: these must never throw, on any platform.
+            Assert.AreEqual(ExpectedResult, WyvrnAPI.SetHapticsEnabled(false));
+            Assert.AreEqual(ExpectedResult, WyvrnAPI.SetHapticsEnabled(true));
+            Assert.AreEqual(ExpectedResult, WyvrnAPI.SetVibrationGain(0));
+            Assert.AreEqual(ExpectedResult, WyvrnAPI.SetVibrationGain(100));
+            Assert.AreEqual(ExpectedResult, WyvrnAPI.SetVibrationGain(-5000));
+            Assert.AreEqual(ExpectedResult, WyvrnAPI.SetVibrationGain(int.MaxValue));
+            Assert.AreEqual(ExpectedResult, WyvrnAPI.SetAdaptiveTriggersEnabled(false));
+            Assert.AreEqual(ExpectedResult, WyvrnAPI.SetAdaptiveTriggersEnabled(true));
         }
 
         [Test]
-        public void GettersAlwaysWriteADefinedValueOffPs5()
+        public void GettersAlwaysWriteADefinedValue()
         {
             // Seed each with a value the implementation would never choose, so a missing
-            // write is visible.
-            bool haptics = true;
-            Assert.AreEqual(RazerErrors.RZRESULT_NOT_SUPPORTED, WyvrnAPI.GetHapticsEnabled(out haptics));
-            Assert.IsFalse(haptics, "haptics report disabled off PS5");
+            // write is visible. The setters below also make this test independent of the
+            // order NUnit happens to run the fixture in, since on PS5 these controls are
+            // backed by one cache that every test in the assembly shares.
+            WyvrnAPI.SetHapticsEnabled(true);
+            WyvrnAPI.SetVibrationGain(100);
+            WyvrnAPI.SetAdaptiveTriggersEnabled(true);
+
+            bool haptics = false;
+            Assert.AreEqual(ExpectedResult, WyvrnAPI.GetHapticsEnabled(out haptics));
 
             int gain = -1;
-            Assert.AreEqual(RazerErrors.RZRESULT_NOT_SUPPORTED, WyvrnAPI.GetVibrationGain(out gain));
-            Assert.AreEqual(100, gain, "gain reports unattenuated off PS5");
+            Assert.AreEqual(ExpectedResult, WyvrnAPI.GetVibrationGain(out gain));
+            Assert.IsTrue(gain >= 0 && gain <= 100, "the gain is always written in range");
 
-            bool triggers = true;
-            Assert.AreEqual(RazerErrors.RZRESULT_NOT_SUPPORTED, WyvrnAPI.GetAdaptiveTriggersEnabled(out triggers));
+            bool triggers = false;
+            Assert.AreEqual(ExpectedResult, WyvrnAPI.GetAdaptiveTriggersEnabled(out triggers));
+
+#if UNITY_PS5
+            // The backend caches the three controls whether or not it is initialized, so
+            // what went in must come back out.
+            Assert.IsTrue(haptics, "the cached master switch round-trips");
+            Assert.AreEqual(100, gain, "the cached gain round-trips");
+            Assert.IsTrue(triggers, "the cached adaptive-trigger state round-trips");
+
+            WyvrnAPI.SetVibrationGain(42);
+            int changed;
+            WyvrnAPI.GetVibrationGain(out changed);
+            Assert.AreEqual(42, changed, "a changed gain is reflected");
+
+            WyvrnAPI.SetVibrationGain(int.MaxValue);
+            int clamped;
+            WyvrnAPI.GetVibrationGain(out clamped);
+            Assert.AreEqual(100, clamped, "an out-of-range gain is cached already clamped");
+
+            WyvrnAPI.SetVibrationGain(100); // leave the shared cache as we found it
+#else
+            // Off PS5 the contract is specific: inert, and reporting "no haptics here"
+            // rather than a state a settings widget would echo back to the player.
+            Assert.IsFalse(haptics, "haptics report disabled off PS5");
+            Assert.AreEqual(100, gain, "gain reports unattenuated off PS5");
             Assert.IsFalse(triggers, "adaptive triggers report disabled off PS5");
+#endif
         }
     }
 }

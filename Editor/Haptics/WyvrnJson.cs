@@ -92,6 +92,12 @@ namespace WyvrnSDK.Haptics.EditorTools
             return Kind == ValueKind.String ? stringValue : null;
         }
 
+        /// <summary>The value of a bool value, or false for anything else.</summary>
+        public bool AsBool()
+        {
+            return Kind == ValueKind.Bool && boolValue;
+        }
+
         /// <summary>Returns the named field of an object value, or null if absent.</summary>
         public WyvrnJsonValue GetField(string name)
         {
@@ -112,6 +118,18 @@ namespace WyvrnSDK.Haptics.EditorTools
                 return true;
             }
             value = null;
+            return false;
+        }
+
+        public bool TryGetBool(string name, out bool value)
+        {
+            WyvrnJsonValue field = GetField(name);
+            if (field != null && field.Kind == ValueKind.Bool)
+            {
+                value = field.boolValue;
+                return true;
+            }
+            value = false;
             return false;
         }
 
