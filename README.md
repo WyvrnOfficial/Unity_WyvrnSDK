@@ -52,11 +52,13 @@ Three pieces make this work:
 
 ### Setup
 
-**1. Drop in the Interhaptics libraries.** Put `HAR.prx` and
-`Provider_DualSensePS5.prx` in `Plugins/PS5/` and tick **PS5** on each in the
-Inspector. These are licensed separately and are not part of this repository — see
-[Plugins/PS5/README.md](Plugins/PS5/README.md). Without them the SDK stays inert on
-PS5: the title still builds, boots and plays, just silently.
+**1. Drop in the Interhaptics libraries.** Copy `HAR.prx` and
+`Provider_DualSensePS5.prx` out of the Interhaptics Engine SDK for PS5 into
+`Plugins/PS5/`, and tick **PS5** on each in the Inspector. Use the `SDK<version>`
+folder matching your Unity PS5 module, and mind the `lib` prefix on SDK 7–9
+vintages. These binaries are licensed separately and are not part of this
+repository — see [Plugins/PS5/README.md](Plugins/PS5/README.md). Without them the
+SDK stays inert on PS5: the title still builds, boots and plays, just silently.
 
 **2. Point the importer at your haptic folder.** *Project Settings → WYVRN →
 Haptics Import*. The default root is Synapse's install location

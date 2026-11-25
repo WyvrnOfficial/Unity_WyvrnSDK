@@ -20,6 +20,11 @@ namespace WyvrnSDK.Haptics
     /// </summary>
     public sealed class InterhapticsRuntime : IInterhapticsRuntime
     {
+        // Library names, kept in one place because the Interhaptics SDK changed its PS5
+        // file naming between vintages: SDK 7-9 ship libHAR.prx / libProvider_DualSensePS5.prx
+        // while SDK 11-12 ship HAR.prx / Provider_DualSensePS5.prx. These match the newer
+        // naming; on an older SDK either drop the "lib" prefix when staging the files or
+        // change these two lines. See Plugins/PS5/README.md.
         private const string HarLibrary = "HAR";
         private const string ProviderLibrary = "Provider_DualSensePS5";
 
