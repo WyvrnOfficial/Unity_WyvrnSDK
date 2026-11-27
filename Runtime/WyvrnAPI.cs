@@ -30,6 +30,11 @@ namespace WyvrnSDK
 
     public static class WyvrnAPI
     {
+        // Everything down to IsWyvrnSDKAvailable() is the Windows/Xbox path: it probes
+        // and binds the Synapse-hosted RzChromatic DLL. PS5 has no such DLL - events go
+        // to the in-process Interhaptics HAR backend instead - and IL2CPP would try to
+        // resolve these imports at link time, so the whole block is compiled out there.
+#if !UNITY_PS5
 
 #if PLATFORM_XBOXONE
 #if UNITY_EDITOR
@@ -284,14 +289,48 @@ namespace WyvrnSDK
             }
         }
 
+#endif // !UNITY_PS5
+
+#if UNITY_PS5
         /// <summary>
-        /// Check if the RzChromatic DLL exists before calling API Methods
+        /// PS5 haptic backend. Owned statically so it spans the whole SDK lifetime:
+        /// CoreInitSDK / CoreUnInit drive its Initialize() / Shutdown(), and the three
+        /// haptic controls are accepted (and cached) whether or not it is up.
+        /// </summary>
+        private static readonly Haptics.IWyvrnHapticBackend _sBackend = new Haptics.InterhapticsHapticBackend();
+#endif
+
+        /// <summary>
+        /// Check if the Wyvrn SDK is usable before calling API Methods.
+        /// On Windows/Xbox this checks for a production RzChromatic DLL. On PS5 the
+        /// backend is in-process so this is always true; whether the Interhaptics HAR
+        /// libraries actually loaded is reported by CoreInitSDK / IsInitialized.
         /// </summary>
         /// <returns></returns>
         public static bool IsWyvrnSDKAvailable()
         {
+#if UNITY_PS5
+            return true;
+#else
             return _sIsChromaticAvailable;
+#endif
         }
+
+        /// <summary>
+        /// True once the SDK is initialized and able to play events. On PS5 this means
+        /// the render worker is up with the Interhaptics runtime loaded, so it stays
+        /// false when the HAR libraries are missing even though CoreInitSDK succeeded.
+        /// </summary>
+        public static bool IsInitialized()
+        {
+#if UNITY_PS5
+            return _sBackend.IsInitialized;
+#else
+            return _sInitialized;
+#endif
+        }
+
+#if !UNITY_PS5
 
         #region Helpers (handle path conversions)
 
@@ -326,16 +365,26 @@ namespace WyvrnSDK
 
         #endregion
 
+#endif // !UNITY_PS5
 
         #region Public API Methods
+#if !UNITY_PS5
         private static bool _sInitialized = false;
+#endif
         /// <summary>
         /// Direct access to low level API.
+        /// On PS5 this starts the Interhaptics haptic backend instead of the Chroma SDK.
         /// </summary>
         public static int CoreInitSDK(ref WyvrnSDK.APPINFOTYPE appInfo)
         {
             appInfo.SupportedDevice = 63;
 
+#if UNITY_PS5
+            // Succeeds as long as the render worker starts. A missing HAR library leaves
+            // the worker inert rather than failing here, exactly as on Unreal: events are
+            // then dropped silently and IsInitialized() reports false.
+            return _sBackend.Initialize() ? RazerErrors.RZRESULT_SUCCESS : RazerErrors.RZRESULT_INVALID;
+#else
             if (!_sIsChromaticAvailable)
             {
                 return -1;
@@ -350,12 +399,24 @@ namespace WyvrnSDK
                 _sInitialized = true;
             }
             return result;
+#endif
         }
         /// <summary>
         /// Direct access to low level API.
+        /// On PS5 this hands the event to the haptic render worker.
         /// </summary>
         public static int CoreSetEventName(string name)
         {
+#if UNITY_PS5
+            Haptics.WyvrnHapticsLog.Trace(string.Format("Trace [API]: CoreSetEventName('{0}') requested (main thread).", name));
+            if (!_sBackend.IsInitialized)
+            {
+                Haptics.WyvrnHapticsLog.Trace(string.Format("Trace [API]: CoreSetEventName('{0}') DROPPED - backend not initialized.", name));
+                return RazerErrors.RZRESULT_INVALID;
+            }
+            _sBackend.SetEventName(name);
+            return RazerErrors.RZRESULT_SUCCESS;
+#else
             if (!_sIsChromaticAvailable)
             {
                 return -1;
@@ -368,12 +429,18 @@ namespace WyvrnSDK
             int result = PluginCoreSetEventName(lp_Name);
             FreeIntPtr(lp_Name);
             return result;
+#endif
         }
         /// <summary>
         /// Direct access to low level API.
+        /// On PS5 this stops the haptic render worker and tears the HAR runtime down.
         /// </summary>
         public static int CoreUnInit()
         {
+#if UNITY_PS5
+            _sBackend.Shutdown();
+            return RazerErrors.RZRESULT_SUCCESS;
+#else
             if (!_sIsChromaticAvailable)
             {
                 return RazerErrors.RZRESULT_SUCCESS;
@@ -388,8 +455,119 @@ namespace WyvrnSDK
                 _sInitialized = false;
             }
             return result;
+#endif
         }
         #endregion
+
+        #region PS5 haptic controls
+        // Three independent settings: a master on/off, a vibration strength, and an
+        // adaptive-trigger on/off. All may be called before CoreInitSDK and survive
+        // CoreInitSDK/CoreUnInit cycles, because the backend caches them and the render
+        // worker re-applies them on every bring-up (HAR resets its own global intensity
+        // to 1.0 on each Init).
+        //
+        // Each returns RZRESULT_SUCCESS on PS5 and RZRESULT_NOT_SUPPORTED on every other
+        // platform: these are PS5-only levers, as RzChromatic has no equivalent.
+
+        /// <summary>
+        /// PS5 only. Master haptics on/off.
+        /// Off is a hard off: anything playing stops, both adaptive triggers are released,
+        /// and further events are skipped entirely rather than played inaudibly. Turning it
+        /// back on does not resume what was stopped.
+        /// </summary>
+        public static int SetHapticsEnabled(bool enabled)
+        {
+#if UNITY_PS5
+            // Deliberately NOT gated on IsInitialized(): the backend caches the setting and
+            // the render worker applies it once HAR comes up, so a title can set it at startup.
+            _sBackend.SetHapticsEnabled(enabled);
+            return RazerErrors.RZRESULT_SUCCESS;
+#else
+            return RazerErrors.RZRESULT_NOT_SUPPORTED;
+#endif
+        }
+
+        /// <summary>
+        /// PS5 only. Writes the master haptics on/off state to outEnabled.
+        /// outEnabled is false on platforms without haptics support.
+        /// </summary>
+        public static int GetHapticsEnabled(out bool outEnabled)
+        {
+#if UNITY_PS5
+            outEnabled = _sBackend.AreHapticsEnabled;
+            return RazerErrors.RZRESULT_SUCCESS;
+#else
+            outEnabled = false; // no haptics to enable off PS5
+            return RazerErrors.RZRESULT_NOT_SUPPORTED;
+#endif
+        }
+
+        /// <summary>
+        /// PS5 only. Sets the vibration strength, 0..100 (0 = silent, 100 = full strength).
+        /// Values outside the range are clamped.
+        ///
+        /// Vibration only. It does not touch adaptive-trigger resistance, which keeps the
+        /// strength the effect author designed and has its own on/off. A gain of 0 silences
+        /// vibration but still plays events, because an event may carry a Stiffness track
+        /// that needs to arm a trigger - use SetHapticsEnabled(false) to stop everything.
+        /// </summary>
+        public static int SetVibrationGain(int gain)
+        {
+#if UNITY_PS5
+            _sBackend.SetVibrationGain(Haptics.WyvrnHapticGain.Clamp(gain));
+            return RazerErrors.RZRESULT_SUCCESS;
+#else
+            return RazerErrors.RZRESULT_NOT_SUPPORTED;
+#endif
+        }
+
+        /// <summary>
+        /// PS5 only. Writes the current vibration gain (0..100) to outGain.
+        /// outGain is set to 100 (unattenuated) on platforms without haptics support.
+        /// </summary>
+        public static int GetVibrationGain(out int outGain)
+        {
+#if UNITY_PS5
+            outGain = _sBackend.VibrationGain;
+            return RazerErrors.RZRESULT_SUCCESS;
+#else
+            outGain = 100; // nothing is attenuating anything off PS5
+            return RazerErrors.RZRESULT_NOT_SUPPORTED;
+#endif
+        }
+
+        /// <summary>
+        /// PS5 only. Turns DualSense adaptive-trigger resistance on or off, independently of
+        /// vibration. Off releases whatever is armed but leaves events playing and vibrating;
+        /// on re-arms whatever is still claimed.
+        /// </summary>
+        public static int SetAdaptiveTriggersEnabled(bool enabled)
+        {
+#if UNITY_PS5
+            _sBackend.SetAdaptiveTriggersEnabled(enabled);
+            return RazerErrors.RZRESULT_SUCCESS;
+#else
+            return RazerErrors.RZRESULT_NOT_SUPPORTED;
+#endif
+        }
+
+        /// <summary>
+        /// PS5 only. Writes the adaptive-trigger on/off state to outEnabled.
+        /// outEnabled is false on platforms without adaptive triggers.
+        /// </summary>
+        public static int GetAdaptiveTriggersEnabled(out bool outEnabled)
+        {
+#if UNITY_PS5
+            outEnabled = _sBackend.AreAdaptiveTriggersEnabled;
+            return RazerErrors.RZRESULT_SUCCESS;
+#else
+            outEnabled = false; // no adaptive triggers off PS5
+            return RazerErrors.RZRESULT_NOT_SUPPORTED;
+#endif
+        }
+        #endregion
+
+#if !UNITY_PS5
 
         #region Private DLL Hooks
         /// <summary>
@@ -411,5 +589,7 @@ namespace WyvrnSDK
         [DllImport(DLL_NAME, CallingConvention = CallingConvention.Cdecl)]
         private static extern int PluginCoreUnInit();
         #endregion
+
+#endif // !UNITY_PS5
     }
 }

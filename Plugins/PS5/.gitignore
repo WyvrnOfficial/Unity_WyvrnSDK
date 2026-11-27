@@ -1,0 +1,8 @@
+# Interhaptics HAR engine + DualSense provider binaries are distributed separately
+# under their own licensing and must never be committed. Drop them into this folder
+# locally; Unity stages them into the PS5 player when present, and the SDK stays
+# inert on PS5 when they are absent.
+*.prx
+*.a
+*.prx.meta
+*.a.meta

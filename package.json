@@ -1,8 +1,8 @@
 {
   "name": "com.razer.wyvrnsdk",
-  "version": "2.0.22",
+  "version": "2.1.0",
   "displayName": "Razer WYVRN SDK",
-  "description": "Razer WYVRN SDK for Unity",
+  "description": "Razer WYVRN SDK for Unity: AI Gaming Tools, Chroma RGB, and Sensa HD Haptics (including PS5 DualSense haptics and adaptive triggers).",
   "unity": "2021.3",
   "unityRelease": "15f1",
   "documentationUrl": "https://github.com/WyvrnOfficial/Unity_WyvrnSDK/tree/UNICODE_WITHOUT_DLL",
@@ -18,7 +18,11 @@
     "haps",
     "haptics",
     "rgb",
-    "chroma rgb"
+    "chroma rgb",
+    "ps5",
+    "dualsense",
+    "adaptive triggers",
+    "interhaptics"
   ],
   "author": {
     "name": "Razer Inc.",

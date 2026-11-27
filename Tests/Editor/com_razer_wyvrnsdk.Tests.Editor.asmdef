@@ -1,0 +1,25 @@
+{
+    "name": "Razer.WyvrnSDK.Tests.Editor",
+    "rootNamespace": "",
+    "references": [
+        "GUID:1f89ff0407f86cf49a923a565e02a822",
+        "GUID:22884823fb7adff40b41e59b7598005a",
+        "UnityEngine.TestRunner",
+        "UnityEditor.TestRunner"
+    ],
+    "includePlatforms": [
+        "Editor"
+    ],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": true,
+    "precompiledReferences": [
+        "nunit.framework.dll"
+    ],
+    "autoReferenced": false,
+    "defineConstraints": [
+        "UNITY_INCLUDE_TESTS"
+    ],
+    "versionDefines": [],
+    "noEngineReferences": false
+}
