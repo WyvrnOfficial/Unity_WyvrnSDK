@@ -64,14 +64,9 @@ package from disk*, or reference it in your `Packages/manifest.json`:
 
 **1. Drop in the Interhaptics libraries.** Copy `HAR.prx` and
 `Provider_DualSensePS5.prx` out of the Interhaptics Engine SDK for PS5 into
-`Assets/Plugins/PS5/` in your game project, together with the `.prx.meta` next to
-each one (not the `.a` files). The `.prx.meta` files enable each library for PS5 only;
-if your copy has none, select each `.prx`, tick only **PS5** under *Platform
-settings* in the Inspector and click **Apply**. Commit the `.prx.meta` files with
-your project so the setting is kept. Don't put the libraries inside this package:
-a Git-URL install lives in `Library/PackageCache`, which Unity rebuilds, so they
-would be lost. Use the `SDK<version>` folder matching your Unity PS5 module, and
-mind the `lib` prefix on SDK 7–9 vintages. These binaries are
+`Plugins/PS5/`. Unity recognises them as PS5 plugins from the folder name, so there
+is nothing to tick in the Inspector. Use the `SDK<version>` folder matching your
+Unity PS5 module, and mind the `lib` prefix on SDK 7–9 vintages. These binaries are
 licensed separately and are not part of this repository — see
 [Plugins/PS5/README.md](Plugins/PS5/README.md). Without them the SDK stays inert on
 PS5: the title still builds, boots and plays, just silently.

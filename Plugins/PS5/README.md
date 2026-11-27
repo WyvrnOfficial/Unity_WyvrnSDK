@@ -7,21 +7,15 @@ and are therefore **not committed** to this repository (see `.gitignore`).
 ## What to put here
 
 Copy these two files out of the Interhaptics Engine SDK for PS5
-(`InterhapticsEngine_PS5/bin/SDK<version>/`) into `Assets/Plugins/PS5/` in your
-game project. This folder works too, but only when the package is installed from
-disk or embedded in `Packages/`: a Git-URL install lives in `Library/PackageCache`,
-which Unity rebuilds, so anything copied here would be lost.
+(`InterhapticsEngine_PS5/bin/SDK<version>/`) into this folder:
 
 | File | From | Purpose |
 |------|------|---------|
 | `HAR.prx` | `bin/SDK<version>/HapticEngine/` | Haptic Audio Renderer: parses `.haps`, synthesises vibration, evaluates the Stiffness envelope. |
 | `Provider_DualSensePS5.prx` | `bin/SDK<version>/HapticProviders/` | DualSense output: palm actuators and the L2/R2 adaptive triggers. |
 
-Copy the `.prx.meta` file next to each `.prx` as well. It enables the library
-for PS5 only, so there is nothing to set by hand. If your copy of the libraries
-has no `.prx.meta` files, select each `.prx` in the Inspector, tick only **PS5**
-under *Platform settings* and click **Apply**. Commit the `.prx.meta` files with
-your game project so the setting survives a fresh clone.
+Then, in the Unity Inspector, select each `.prx` and tick **PS5** under
+*Platform settings* so Unity stages it into the player.
 
 Pick the `SDK<version>` folder matching the **PS5 SDK your Unity PS5 module is
 built against** — mixing vintages is the usual cause of a load failure.
@@ -30,7 +24,8 @@ Only the `.prx` are needed. The `_stub.a` / `_stub_weak.a` import libraries
 alongside them are for link-time binding, which is how the *Unreal* plugin
 consumes HAR; Unity does not need them.
 
-IL2CPP compiles each `[DllImport]` into a **runtime** lookup —
+This was verified against a real PS5 player build (Unity 6000.3.17f1, Prospero
+SDK 12.000). IL2CPP compiles each `[DllImport]` into a **runtime** lookup —
 
 ```cpp
 il2cpp_codegen_resolve_pinvoke<PInvokeFunc>(IL2CPP_NATIVE_STRING("HAR"), "AddHM", ...)
