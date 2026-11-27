@@ -1,5 +1,7 @@
 # WYVRN SDK
 
+**Version 2.0.22**. See [CHANGELOG.md](CHANGELOG.md) for the release history.
+
 The `WYVRN SDK` is the all-in-one SDK for all Razer technologies: AI Gaming Tools, Chroma RGB, and Sensa HD Haptics.
 The `WYVRN SDK` integration process happens in collaboration with the Razer/WYVRN Team, who designs the Chroma animations, haptic effects, and provides the AI integration. 
 Click here to contact us on [Discord](https://discord.gg/HVa96T6BZu). 
